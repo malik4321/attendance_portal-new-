@@ -154,14 +154,16 @@
 
 """
 Django settings for attendance_portal project.
-Production-ready, works locally and on Render.
+Production-ready for Render & local dev (PostgreSQL).
 """
 
 from pathlib import Path
 from datetime import timedelta
 import os
 
-# Optional: if you want to keep using python-decouple, you still can:
+# -----------------------------
+# Env helper (decouple optional)
+# -----------------------------
 try:
     from decouple import config as _config
     def env(key, default=None):
@@ -170,24 +172,17 @@ except Exception:
     def env(key, default=None):
         return os.getenv(key, default)
 
-# -----------------------------
-# Base paths
-# -----------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # -----------------------------
 # Security / Debug
 # -----------------------------
 SECRET_KEY = env("SECRET_KEY", "dev-secret-change-me")
-DEBUG = env("DEBUG", "True").lower() == "true"
+DEBUG = str(env("DEBUG", "True")).lower() == "true"
 
-# Render sets RENDER_EXTERNAL_HOSTNAME; also allow localhost and *.onrender.com
+# Render sets RENDER_EXTERNAL_HOSTNAME
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".onrender.com"]
 _render_host = env("RENDER_EXTERNAL_HOSTNAME", "")
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    ".onrender.com",
-]
 if _render_host:
     ALLOWED_HOSTS.append(_render_host)
 
@@ -202,12 +197,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party
     "rest_framework",
     "corsheaders",
-    # "whitenoise.runserver_nostatic",  # optional: nicer local static behavior
 
-    # Your apps
     "attendance",
 ]
 
@@ -221,7 +213,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),  # was 5; 30 is nicer for users
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -229,13 +221,12 @@ SIMPLE_JWT = {
 }
 
 # -----------------------------
-# Middleware
-# IMPORTANT: order matters (Security -> WhiteNoise -> Cors -> Common)
+# Middleware (order matters)
 # -----------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # serve static files
-    "corsheaders.middleware.CorsMiddleware",       # CORS must be high
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -244,15 +235,12 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# -----------------------------
-# URLs / WSGI
-# -----------------------------
 ROOT_URLCONF = "attendance_portal.urls"
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],  # optional folder
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -268,55 +256,43 @@ WSGI_APPLICATION = "attendance_portal.wsgi.application"
 
 # -----------------------------
 # CORS / CSRF
-# Put your deployed frontend URL in FRONTEND_URL env on Render
-# (e.g., https://your-frontend.onrender.com).
-# Locally, we still allow 3000.
 # -----------------------------
-FRONTEND_URL = env("FRONTEND_URL", "").rstrip("/")
+FRONTEND_URL = (env("FRONTEND_URL", "") or "").rstrip("/")
 
 DEFAULT_CORS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 
-CORS_ALLOWED_ORIGINS = ([FRONTEND_URL] if FRONTEND_URL else []) + DEFAULT_CORS
+CORS_ALLOWED_ORIGINS = DEFAULT_CORS.copy()
+if FRONTEND_URL.startswith("http://") or FRONTEND_URL.startswith("https://"):
+    CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+
 CORS_ALLOW_CREDENTIALS = True
 
-# CSRF requires scheme+host (no trailing slash)
 CSRF_TRUSTED_ORIGINS = []
 if FRONTEND_URL.startswith("http://") or FRONTEND_URL.startswith("https://"):
     CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
 
-# You had CORS_ALLOW_ALL_ORIGINS=True; safer to keep it False for prod:
-# CORS_ALLOW_ALL_ORIGINS = True  # <-- REMOVE or keep False by omission
-
 # -----------------------------
 # Database
-# Prefer DATABASE_URL (Render Postgres). Otherwise use your local Postgres.
 # -----------------------------
 DATABASE_URL = env("DATABASE_URL", "")
 
 if DATABASE_URL:
-    # Use dj-database-url if available; otherwise minimal parse
-    try:
-        import dj_database_url
-        DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
-    except Exception:
-        # Fallback naive parse (works for typical postgres URLs)
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": DATABASE_URL,  # not ideal; install dj-database-url if you can
-            }
-        }
+    # >>> Ensure dj-database-url is installed (in requirements.txt)
+    import dj_database_url  # will raise if missing
+    DATABASES = {
+        "default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+    }
 else:
-    # Your previous local Postgres config via decouple/env
+    # Local Postgres fallback (make sure these match your local setup)
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": env("DB_NAME", "attendance_db"),
             "USER": env("DB_USER", "postgres"),
-            "PASSWORD": env("DB_PASSWORD", "postgres"),  # set your local password
+            "PASSWORD": env("DB_PASSWORD", ""),  # <<< FIX: use env, not config; no port here
             "HOST": env("DB_HOST", "localhost"),
             "PORT": env("DB_PORT", "5432"),
         }
@@ -341,19 +317,14 @@ USE_I18N = True
 USE_TZ = True
 
 # -----------------------------
-# Static files (WhiteNoise)
+# Static (WhiteNoise)
 # -----------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-# If you also have app-level static/ folders, Django will find them.
-# If you want to include a top-level "static/" folder:
-# STATICFILES_DIRS = [BASE_DIR / "static"]
-
-# Enable gzip/brotli and hashed filenames for cache busting
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # -----------------------------
-# Security (recommended for production)
+# Security for production
 # -----------------------------
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -361,7 +332,4 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# -----------------------------
-# Default PK
-# -----------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
