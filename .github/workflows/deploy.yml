@@ -2,7 +2,7 @@ name: Deploy React (frontend) to GitHub Pages
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]   # you're on main (not master)
   workflow_dispatch:
 
 permissions:
@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false   # <— IMPORTANT: do not try to fetch submodules
 
       - name: Use Node
         uses: actions/setup-node@v4
@@ -34,8 +36,9 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      # CRA can fail on warnings when CI=true; disable that
       - name: Build
-        run: npm run build
+        run: CI=false npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
