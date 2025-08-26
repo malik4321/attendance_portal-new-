@@ -57,10 +57,58 @@
 // export default axiosInstance;
 
 
+// import axios from "axios";
+
+// // ✅ include /api/ and end with a slash
+// const baseURL = "http://localhost:8000/api/";
+
+// const axiosInstance = axios.create({
+//   baseURL,
+//   headers: { "Content-Type": "application/json" },
+// });
+
+// // Attach JWT
+// axiosInstance.interceptors.request.use((config) => {
+//   const token = localStorage.getItem("access");
+//   if (token) config.headers.Authorization = `Bearer ${token}`;
+//   return config;
+// });
+
+// // Auto-refresh on 401 using your /api/refresh/ endpoint
+// axiosInstance.interceptors.response.use(
+//   (res) => res,
+//   async (error) => {
+//     const original = error.config;
+//     if (error.response?.status === 401 && !original._retry) {
+//       original._retry = true;
+//       try {
+//         const refresh = localStorage.getItem("refresh");
+//         const r = await axios.post(`${baseURL}refresh/`, { refresh }); // ✅ matches app urls
+//         const newAccess = r.data.access;
+//         localStorage.setItem("access", newAccess);
+//         original.headers.Authorization = `Bearer ${newAccess}`;
+//         return axiosInstance(original);
+//       } catch (e) {
+//         window.location.href = "/login"; // back to login if refresh fails
+//         return Promise.reject(e);
+//       }
+//     }
+//     return Promise.reject(error);
+//   }
+// );
+
+// export default axiosInstance;
+
+
+// frontend/src/utils/axiosInstance.js
 import axios from "axios";
 
-// ✅ include /api/ and end with a slash
-const baseURL = "http://localhost:8000/api/";
+// Use env var, fallback to localhost for local dev
+const baseURL =
+  process.env.REACT_APP_API_BASE_URL || "http://localhost:8000/api/";
+
+// For GitHub Pages, PUBLIC_URL is "/attendance_portal-new-"
+const LOGIN_PATH = `${process.env.PUBLIC_URL || ""}/login`;
 
 const axiosInstance = axios.create({
   baseURL,
@@ -74,22 +122,23 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-refresh on 401 using your /api/refresh/ endpoint
+// Auto-refresh on 401 using /api/refresh/
 axiosInstance.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (error?.response?.status === 401 && !original._retry) {
       original._retry = true;
       try {
         const refresh = localStorage.getItem("refresh");
-        const r = await axios.post(`${baseURL}refresh/`, { refresh }); // ✅ matches app urls
+        const r = await axios.post(`${baseURL}refresh/`, { refresh });
         const newAccess = r.data.access;
         localStorage.setItem("access", newAccess);
         original.headers.Authorization = `Bearer ${newAccess}`;
         return axiosInstance(original);
       } catch (e) {
-        window.location.href = "/login"; // back to login if refresh fails
+        // Redirect correctly even under GitHub Pages repo path
+        window.location.href = LOGIN_PATH;
         return Promise.reject(e);
       }
     }
