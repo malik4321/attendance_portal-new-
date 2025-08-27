@@ -335,7 +335,7 @@ function Login({ onLogin }) {
 
       <nav className="w-full bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 text-white shadow-lg p-4 flex justify-between items-center fixed top-0 left-0 z-40">
         <div className="flex items-center gap-4">
-          <img src="/IMM.png" alt="IMM Logo" className="h-14 w-auto" />
+          <img src={process.env.PUBLIC_URL + "/IMM.png"} alt="IMM Logo" className="h-14 w-auto" />
           <span className="text-lg md:text-xl font-semibold tracking-wide">
             Interlink <span className="font-bold">Multi Media</span>
           </span>
